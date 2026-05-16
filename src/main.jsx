@@ -638,5 +638,18 @@ function Panel({ title, icon, children }) {
     </section>
   );
 }
+function RouterWrapper() {
+  const params = useParams();
+  return <App routeProjectId={params.projectId ? Number(params.projectId) : null} routeMemberId={params.memberId ? Number(params.memberId) : null} />;
+}
 
-createRoot(document.getElementById("root")).render(<App />);
+createRoot(document.getElementById("root")).render(
+  <BrowserRouter>
+    <Routes>
+      <Route path="/" element={<RouterWrapper />} />
+      <Route path="/projects/:projectId" element={<RouterWrapper />} />
+      <Route path="/projects/:projectId/profile/:memberId" element={<RouterWrapper />} />
+      <Route path="*" element={<RouterWrapper />} />
+    </Routes>
+  </BrowserRouter>
+);
