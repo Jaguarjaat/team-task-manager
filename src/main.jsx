@@ -415,7 +415,7 @@ function App({ routeProjectId = null, routeMemberId = null }) {
           </section>
         ) : (
           <>
-            <TelemetryDashboard dashboard={dashboard} />
+            <Dashboard dashboard={dashboard} />
             <header className="project-header">
               <div className="header-info">
                 <span className="eyebrow">{projectDetail.role} workspace</span>
