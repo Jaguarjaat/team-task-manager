@@ -285,9 +285,16 @@ function App() {
       <aside className="sidebar">
         <div className="brand-mark"><FolderKanban size={22} /> TTM</div>
         <div className="user-box">
-          <strong>{user.name}</strong>
-          <span>{user.email}</span>
-          {projectDetail?.role && <small className="user-role">{projectDetail.role}</small>}
+          <div className="user-identity">
+            <div className="avatar">{user.name?.[0]?.toUpperCase() || "?"}</div>
+            <div>
+              <strong>{user.name}</strong>
+              <span>{user.email}</span>
+              {projectDetail?.role && (
+                <small className={`user-role ${projectDetail.role.toLowerCase()}`}>{projectDetail.role}</small>
+              )}
+            </div>
+          </div>
         </div>
         {user.global_role === "System Admin" && (
           <form className="mini-form" onSubmit={createProject}>
@@ -456,7 +463,7 @@ function App() {
                         <span>
                           <strong>{member.name}</strong>
                           <small>{member.email}</small>
-                          <small className="member-role">{member.role}</small>
+                          <small className={`member-role ${member.role.toLowerCase()}`}>{member.role}</small>
                         </span>
                         {isAdmin && member.id !== user.id && (
                           <div className="member-actions">
