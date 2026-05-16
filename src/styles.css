@@ -294,6 +294,18 @@ select option {
   font-size: 0.85rem;
 }
 
+.user-role {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.65rem;
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--accent);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  width: fit-content;
+}
+
 .mini-form, .stack-form {
   display: grid;
   gap: 1rem;

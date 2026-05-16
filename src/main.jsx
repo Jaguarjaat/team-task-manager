@@ -287,6 +287,7 @@ function App() {
         <div className="user-box">
           <strong>{user.name}</strong>
           <span>{user.email}</span>
+          {projectDetail?.role && <small className="user-role">{projectDetail.role}</small>}
         </div>
         {user.global_role === "System Admin" && (
           <form className="mini-form" onSubmit={createProject}>
