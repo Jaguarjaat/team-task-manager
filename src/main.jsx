@@ -14,6 +14,8 @@ import {
   UserPlus,
   Users,
   GripVertical,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import "./styles.css";
 
@@ -51,6 +53,7 @@ function AuthScreen({ api, onAuthed }) {
   const [mode, setMode] = useState("login");
   const [form, setForm] = useState({ name: "", email: "", password: "", globalRole: "Member", adminKey: "" });
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   async function submit(event) {
     event.preventDefault();
@@ -94,7 +97,16 @@ function AuthScreen({ api, onAuthed }) {
           </>
         )}
         <label>Email<input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></label>
-        <label>Password<input type="password" minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required /></label>
+        <label>
+          Password
+          <div className="password-input-wrapper">
+            <input type={showPassword ? "text" : "password"} minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+            <button type="button" className="show-password-btn" onClick={() => setShowPassword(!showPassword)}>
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          <small style={{ color: "var(--muted)", fontSize: "0.8rem", marginTop: "-0.25rem" }}>Password should be 8 characters or numbers</small>
+        </label>
         {error && <p className="error" style={{ fontSize: "0.85rem", lineHeight: "1.4" }}>{error}</p>}
         <button className="primary" type="submit">{mode === "signup" ? "Create account" : "Enter workspace"}</button>
         
