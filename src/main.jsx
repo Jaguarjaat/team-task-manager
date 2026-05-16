@@ -660,49 +660,7 @@ function Panel({ title, icon, children }) {
     </section>
   );
 }
-function SettingsModal({ api, onClose }) {
-  const [name, setName] = useState("");
-  const [password, setPassword] = useState("");
-  const [apiKey, setApiKey] = useState("");
 
-  useEffect(() => {
-    api.request("/me/settings").then(res => {
-      if (res?.settings) {
-        setName(res.settings.name);
-        setApiKey(res.settings.api_key || "");
-      }
-    });
-  }, [api]);
-
-  async function submit(e) {
-    e.preventDefault();
-    await api.request("/me/settings", {
-      method: "PUT",
-      body: JSON.stringify({ name, password: password || undefined, api_key: apiKey })
-    });
-    onClose();
-  }
-
-  return (
-    <div className="modal-backdrop">
-      <div className="modal-content glass-panel">
-        <div className="modal-header">
-          <h2><Settings2 size={18} /> System Configurations</h2>
-          <button className="icon-button" onClick={onClose}>&times;</button>
-        </div>
-        <form className="stack-form" onSubmit={submit}>
-          <label>Operator Name<input value={name} onChange={e => setName(e.target.value)} required /></label>
-          <label>Update Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Leave blank to keep current" /></label>
-          <label>
-            OpenAI API Key (Required for Autonomous Ops)
-            <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-..." />
-          </label>
-          <button className="primary" type="submit">Save Configurations</button>
-        </form>
-      </div>
-    </div>
-  );
-}
 
 
 function TelemetryDashboard({ dashboard }) {
@@ -791,7 +749,8 @@ function SettingsModal({ api, onClose }) {
     </div>
   );
 }
-\nfunction RouterWrapper() {
+
+function RouterWrapper() {
   const params = useParams();
   return <App routeProjectId={params.projectId ? Number(params.projectId) : null} routeMemberId={params.memberId ? Number(params.memberId) : null} />;
 }
