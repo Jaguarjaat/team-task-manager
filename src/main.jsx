@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   AlertTriangle,
+  ArrowLeft,
   CheckCircle2,
   ClipboardList,
   Compass,
@@ -17,6 +18,7 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
+import { BrowserRouter, Routes, Route, useNavigate, useParams } from "react-router-dom";
 import "./styles.css";
 
 const API = "/api";
@@ -125,11 +127,12 @@ function AuthScreen({ api, onAuthed }) {
   );
 }
 
-function App() {
+function App({ routeProjectId = null, routeMemberId = null }) {
   const api = useApi();
+  const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [projects, setProjects] = useState([]);
-  const [activeId, setActiveId] = useState(null);
+  const [activeId, setActiveId] = useState(routeProjectId);
   const [projectDetail, setProjectDetail] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [dashboard, setDashboard] = useState(null);
@@ -138,13 +141,15 @@ function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [requests, setRequests] = useState([]);
   const [toast, setToast] = useState("");
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [activeProfileId, setActiveProfileId] = useState(routeMemberId);
 
   async function loadDiscoverable() {
     const data = await api.request("/projects/discover");
     setDiscoverable(data.projects);
   }
 
-  async function loadAll(nextActive = activeId) {
+  async function loadAll(nextActive = routeProjectId || activeId) {
     const [projectData, dashData] = await Promise.all([api.request("/projects"), api.request("/dashboard")]);
     setProjects(projectData.projects);
     setDashboard(dashData);
@@ -181,19 +186,28 @@ function App() {
     api.request("/me")
       .then((data) => {
         setUser(data.user);
-        return loadAll();
+        return loadAll(routeProjectId);
       })
       .catch((err) => {
         console.error("Initialization error:", err);
-        // Temporarily disabling automatic logout to prevent the logout loop
-        // api.saveToken("");
       });
-  }, [api.token]);
+  }, [api.token, routeProjectId]);
+
+  useEffect(() => {
+    if (routeProjectId && routeProjectId !== activeId) {
+      setActiveId(routeProjectId);
+    }
+  }, [routeProjectId]);
+
+  useEffect(() => {
+    setActiveProfileId(routeMemberId);
+  }, [routeMemberId]);
 
   if (!api.token || !user) return <AuthScreen api={api} onAuthed={setUser} />;
 
   const role = projectDetail?.role;
   const isAdmin = role === "Admin" || user?.global_role === "System Admin";
+  const profileMember = activeProfileId ? projectDetail?.members.find((member) => member.id === activeProfileId) : null;
 
   async function createProject(event) {
     event.preventDefault();
@@ -309,7 +323,7 @@ function App() {
           </button>
           <hr />
           {projects.map((project) => (
-            <button key={project.id} className={project.id === activeId && viewMode === "workspace" ? "active" : ""} onClick={() => { setActiveId(project.id); loadProject(project.id); setViewMode("workspace"); }}>
+            <button key={project.id} className={project.id === activeId && viewMode === "workspace" ? "active" : ""} onClick={() => { setActiveId(project.id); navigate(`/projects/${project.id}`); loadProject(project.id); setViewMode("workspace"); }}>
               <div className="project-list-top">
                 <span>{project.name}</span>
                 <small>{project.role}</small>
@@ -365,6 +379,26 @@ function App() {
             <ClipboardList size={42} />
             <h2>Create a project to start assigning work.</h2>
           </section>
+        ) : profileMember ? (
+          <section className="profile-page">
+            <div className="profile-back">
+              <button className="ghost" onClick={() => { setActiveProfileId(null); navigate(`/projects/${activeId}`); }}>
+                <ArrowLeft size={16} /> Back to project
+              </button>
+            </div>
+            <div className="profile-card">
+              <div className="profile-avatar-large">{profileMember.name?.[0]?.toUpperCase()}</div>
+              <div>
+                <h2>{profileMember.name}</h2>
+                <p>{profileMember.email}</p>
+                <span className={`member-role ${profileMember.role.toLowerCase()}`}>{profileMember.role}</span>
+              </div>
+            </div>
+            <div className="profile-details">
+              <h3>Operator profile</h3>
+              <p>This operator is assigned to the current project and can collaborate on tasks based on their role.</p>
+            </div>
+          </section>
         ) : (
           <>
             <Dashboard dashboard={dashboard} />
@@ -380,6 +414,25 @@ function App() {
               </div>
               <div className="header-actions">
                 <span className={`role-chip ${isAdmin ? "admin" : ""}`}><Shield size={15} /> {projectDetail.role}</span>
+                <div className="profile-dropdown">
+                  <button className="profile-button" onClick={() => setProfileMenuOpen((open) => !open)}>
+                    {user.name?.[0]?.toUpperCase() || "U"}
+                  </button>
+                  {profileMenuOpen && (
+                    <div className="profile-menu">
+                      <div className="profile-menu-item">
+                        <strong>{user.name}</strong>
+                        <span>{user.email}</span>
+                      </div>
+                      <button className="ghost" onClick={() => { setProfileMenuOpen(false); navigate(`/projects/${activeId}`); }}>
+                        Refresh project link
+                      </button>
+                      <button className="ghost danger" onClick={() => { setProfileMenuOpen(false); api.saveToken(""); setUser(null); }}>
+                        Logout
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </header>
 
@@ -459,7 +512,7 @@ function App() {
                 <Panel title="Team" icon={<Users size={18} />}>
                   <div className="member-list">
                     {projectDetail.members.map((member) => (
-                      <div className="member" key={member.id}>
+                      <div className="member" key={member.id} onClick={() => { setActiveProfileId(member.id); navigate(`/projects/${activeId}/profile/${member.id}`); }}>
                         <span>
                           <strong>{member.name}</strong>
                           <small>{member.email}</small>
@@ -467,8 +520,8 @@ function App() {
                         </span>
                         {isAdmin && member.id !== user.id && (
                           <div className="member-actions">
-                            {member.role === "Member" && <button className="icon-button" onClick={() => promoteMember(member.id)} aria-label="Make Admin" title="Make Admin"><Shield size={15} /></button>}
-                            <button className="icon-button danger" onClick={() => removeMember(member.id)} aria-label="Remove member" title="Remove Member"><Trash2 size={15} /></button>
+                            {member.role === "Member" && <button className="icon-button" onClick={(event) => { event.stopPropagation(); promoteMember(member.id); }} aria-label="Make Admin" title="Make Admin"><Shield size={15} /></button>}
+                            <button className="icon-button danger" onClick={(event) => { event.stopPropagation(); removeMember(member.id); }} aria-label="Remove member" title="Remove Member"><Trash2 size={15} /></button>
                           </div>
                         )}
                       </div>
