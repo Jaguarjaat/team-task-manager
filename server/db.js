@@ -39,11 +39,12 @@ export async function initDb() {
       email TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       global_role TEXT NOT NULL DEFAULT 'Member' CHECK (global_role IN ('System Admin', 'Member')),
+      api_key TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
     ALTER TABLE users ADD COLUMN IF NOT EXISTS global_role TEXT NOT NULL DEFAULT 'Member' CHECK (global_role IN ('System Admin', 'Member'));
-
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS api_key TEXT;
 
     CREATE TABLE IF NOT EXISTS projects (
       id SERIAL PRIMARY KEY,

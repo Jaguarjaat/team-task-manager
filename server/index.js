@@ -138,6 +138,26 @@ app.post("/api/auth/login", validate(loginSchema), async (req, res) => {
 
 app.get("/api/me", requireAuth, (req, res) => res.json({ user: req.user }));
 
+app.get("/api/me/settings", requireAuth, async (req, res) => {
+  const { rows } = await query("SELECT name, email, api_key FROM users WHERE id = $1", [req.user.id]);
+  res.json({ settings: rows[0] });
+});
+
+app.put("/api/me/settings", requireAuth, async (req, res) => {
+  const { name, password, api_key } = req.body;
+  if (name) {
+    await query("UPDATE users SET name = $1 WHERE id = $2", [name, req.user.id]);
+  }
+  if (api_key !== undefined) {
+    await query("UPDATE users SET api_key = $1 WHERE id = $2", [api_key, req.user.id]);
+  }
+  if (password && password.length >= 8) {
+    const hash = await bcrypt.hash(password, 10);
+    await query("UPDATE users SET password_hash = $1 WHERE id = $2", [hash, req.user.id]);
+  }
+  res.json({ ok: true });
+});
+
 app.delete("/api/me", requireAuth, async (req, res) => {
   await query("DELETE FROM users WHERE id = $1", [req.user.id]);
   res.json({ ok: true });

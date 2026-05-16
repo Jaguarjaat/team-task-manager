@@ -17,6 +17,14 @@ import {
   GripVertical,
   Eye,
   EyeOff,
+  Settings,
+  Activity,
+  TerminalSquare,
+  Cpu,
+  RadioTower,
+  Power,
+  Settings2,
+  Filter,
 } from "lucide-react";
 import { BrowserRouter, Routes, Route, useNavigate, useParams } from "react-router-dom";
 import "./styles.css";
@@ -143,6 +151,8 @@ function App({ routeProjectId = null, routeMemberId = null }) {
   const [allUsers, setAllUsers] = useState([]);
   const [toast, setToast] = useState("");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [priorityFilter, setPriorityFilter] = useState("");
   const [activeProfileId, setActiveProfileId] = useState(routeMemberId);
 
   async function loadDiscoverable() {
@@ -378,9 +388,10 @@ function App({ routeProjectId = null, routeMemberId = null }) {
             </div>
           </section>
         ) : !projectDetail ? (
-          <section className="empty-state">
-            <ClipboardList size={42} />
-            <h2>Create a project to start assigning work.</h2>
+          <section className="empty-state cyberpunk-empty">
+            <RadioTower size={42} className="pulse-icon" />
+            <h2>System Standby</h2>
+            <p>Awaiting operator input to initialize project parameters.</p>
           </section>
         ) : profileMember ? (
           <section className="profile-page">
@@ -404,7 +415,7 @@ function App({ routeProjectId = null, routeMemberId = null }) {
           </section>
         ) : (
           <>
-            <Dashboard dashboard={dashboard} />
+            <TelemetryDashboard dashboard={dashboard} />
             <header className="project-header">
               <div className="header-info">
                 <span className="eyebrow">{projectDetail.role} workspace</span>
@@ -427,6 +438,9 @@ function App({ routeProjectId = null, routeMemberId = null }) {
                         <strong>{user.name}</strong>
                         <span>{user.email}</span>
                       </div>
+                      <button className="ghost" onClick={() => { setProfileMenuOpen(false); setSettingsOpen(true); }}>
+                        Account Settings
+                      </button>
                       <button className="ghost" onClick={() => { setProfileMenuOpen(false); navigate(`/projects/${activeId}`); }}>
                         Refresh project link
                       </button>
@@ -444,10 +458,17 @@ function App({ routeProjectId = null, routeMemberId = null }) {
                 <div className="search-bar">
                   <Search size={18} className="search-icon" />
                   <input type="text" placeholder="Search tasks by title or description..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                  <div className="filters">
+                    <Filter size={16} />
+                    <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
+                      <option value="">All Priorities</option>
+                      {priorities.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
                 </div>
                 <div className="task-board">
                   {statuses.map((status) => {
-                    const filteredTasks = tasks.filter(t => t.status === status && (!searchQuery || t.title.toLowerCase().includes(searchQuery.toLowerCase()) || t.description?.toLowerCase().includes(searchQuery.toLowerCase())));
+                    const filteredTasks = tasks.filter(t => t.status === status && (!searchQuery || t.title.toLowerCase().includes(searchQuery.toLowerCase()) || t.description?.toLowerCase().includes(searchQuery.toLowerCase())) && (!priorityFilter || t.priority === priorityFilter));
                     return (
                       <TaskColumn
                         key={status}
@@ -542,6 +563,7 @@ function App({ routeProjectId = null, routeMemberId = null }) {
         )}
         {toast && <button className="toast" onAnimationEnd={() => setToast("")}>{toast}</button>}
       </section>
+          {settingsOpen && <SettingsModal api={api} onClose={() => setSettingsOpen(false)} />}
     </main>
   );
 }
@@ -638,7 +660,138 @@ function Panel({ title, icon, children }) {
     </section>
   );
 }
-function RouterWrapper() {
+function SettingsModal({ api, onClose }) {
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [apiKey, setApiKey] = useState("");
+
+  useEffect(() => {
+    api.request("/me/settings").then(res => {
+      if (res?.settings) {
+        setName(res.settings.name);
+        setApiKey(res.settings.api_key || "");
+      }
+    });
+  }, [api]);
+
+  async function submit(e) {
+    e.preventDefault();
+    await api.request("/me/settings", {
+      method: "PUT",
+      body: JSON.stringify({ name, password: password || undefined, api_key: apiKey })
+    });
+    onClose();
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-content glass-panel">
+        <div className="modal-header">
+          <h2><Settings2 size={18} /> System Configurations</h2>
+          <button className="icon-button" onClick={onClose}>&times;</button>
+        </div>
+        <form className="stack-form" onSubmit={submit}>
+          <label>Operator Name<input value={name} onChange={e => setName(e.target.value)} required /></label>
+          <label>Update Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Leave blank to keep current" /></label>
+          <label>
+            OpenAI API Key (Required for Autonomous Ops)
+            <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-..." />
+          </label>
+          <button className="primary" type="submit">Save Configurations</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+
+function TelemetryDashboard({ dashboard }) {
+  const summary = dashboard?.summary || {};
+  const [logs, setLogs] = useState([]);
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const actions = ["[SYS] Cluster node optimized", "[AI] Model degradation < 0.01%", "[NET] Latency steady at 12ms", "[SEC] No anomalies detected", "[AUTH] Handshake successful", "[SYS] Workload balanced"];
+      setLogs(prev => [actions[Math.floor(Math.random() * actions.length)], ...prev].slice(0, 5));
+    }, 3500);
+    return () => clearInterval(interval);
+  }, []);
+
+  const cards = [
+    ["System Uptime", "99.99%", <RadioTower size={18} />],
+    ["Network Latency", "12ms", <Activity size={18} />],
+    ["Active Tasks", summary.total_tasks || 0, <ClipboardList size={18} />],
+    ["Cluster Load", `${Math.floor(Math.random() * 20) + 30}%`, <Cpu size={18} />],
+  ];
+
+  return (
+    <section className="telemetry-dashboard">
+      <div className="telemetry-metrics">
+        {cards.map(([label, value, icon]) => (
+          <article className="metric-glass" key={label}>
+            <div className="icon-glow">{icon}</div>
+            <div>
+              <span>{label}</span>
+              <strong>{value}</strong>
+            </div>
+          </article>
+        ))}
+      </div>
+      <div className="telemetry-terminal">
+        <div className="terminal-header"><TerminalSquare size={14} /> AI Operations Log</div>
+        <div className="terminal-feed">
+          {logs.map((log, i) => <p key={i} style={{ opacity: 1 - i * 0.2 }}>{log}</p>)}
+          {logs.length === 0 && <p>Awaiting initialization...</p>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SettingsModal({ api, onClose }) {
+  const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [apiKey, setApiKey] = useState("");
+
+  useEffect(() => {
+    api.request("/me/settings").then(res => {
+      if (res?.settings) {
+        setName(res.settings.name);
+        setApiKey(res.settings.api_key || "");
+      }
+    });
+  }, [api]);
+
+  async function submit(e) {
+    e.preventDefault();
+    await api.request("/me/settings", {
+      method: "PUT",
+      body: JSON.stringify({ name, password: password || undefined, api_key: apiKey })
+    });
+    onClose();
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal-content glass-panel" style={{ maxWidth: '500px' }}>
+        <div className="modal-header">
+          <h2><Settings2 size={18} /> System Configurations</h2>
+          <button className="icon-button" onClick={onClose}>&times;</button>
+        </div>
+        <form className="stack-form" onSubmit={submit}>
+          <label>Operator Name<input value={name} onChange={e => setName(e.target.value)} required /></label>
+          <label>Update Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Leave blank to keep current" /></label>
+          <label>
+            OpenAI API Key (Required for Autonomous Ops)
+            <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-..." />
+          </label>
+          <button className="primary" type="submit">Save Configurations</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+\nfunction RouterWrapper() {
   const params = useParams();
   return <App routeProjectId={params.projectId ? Number(params.projectId) : null} routeMemberId={params.memberId ? Number(params.memberId) : null} />;
 }

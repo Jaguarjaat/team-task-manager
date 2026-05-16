@@ -956,3 +956,172 @@ select option {
     gap: 1rem;
   }
 }
+
+/* Telemetry Dashboard Upgrade */
+.telemetry-dashboard {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.telemetry-metrics {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.metric-glass {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 1.25rem;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.metric-glass:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(168, 85, 247, 0.1);
+  border-color: rgba(168, 85, 247, 0.3);
+}
+
+.icon-glow {
+  color: var(--accent);
+  background: rgba(168, 85, 247, 0.1);
+  padding: 0.75rem;
+  border-radius: 8px;
+  display: flex;
+  box-shadow: inset 0 0 10px rgba(168, 85, 247, 0.2);
+}
+
+.metric-glass div {
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-glass span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-glass strong {
+  font-size: 1.5rem;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.telemetry-terminal {
+  flex: 1;
+  min-width: 300px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.terminal-header {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.5rem 1rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.terminal-feed {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: #4ade80; /* Neon green */
+  height: 120px;
+}
+
+.terminal-feed p {
+  margin: 0;
+  animation: slideUp 0.3s ease forwards;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); }
+}
+
+/* Modal and Filters */
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 1rem;
+}
+
+.filters select {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.cyberpunk-empty {
+  background: linear-gradient(180deg, rgba(168, 85, 247, 0.05) 0%, transparent 100%);
+  border: 1px dashed rgba(168, 85, 247, 0.3);
+}
+
+.pulse-icon {
+  color: var(--accent);
+  animation: pulseGlow 2s infinite alternate;
+}
+
+@keyframes pulseGlow {
+  from { filter: drop-shadow(0 0 2px rgba(168, 85, 247, 0.5)); }
+  to { filter: drop-shadow(0 0 15px rgba(168, 85, 247, 0.8)); }
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 2rem;
+  border-radius: 12px;
+  width: 100%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.modal-header h2 {
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
