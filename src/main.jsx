@@ -1,0 +1,546 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ClipboardList,
+  Compass,
+  FolderKanban,
+  LogOut,
+  Plus,
+  Search,
+  Shield,
+  Trash2,
+  UserPlus,
+  Users,
+  GripVertical,
+} from "lucide-react";
+import "./styles.css";
+
+const API = "/api";
+const statuses = ["To Do", "In Progress", "Done"];
+const priorities = ["Low", "Medium", "High"];
+
+function useApi() {
+  const [token, setToken] = useState(localStorage.getItem("ttm_token") || "");
+
+  function saveToken(next) {
+    if (next) localStorage.setItem("ttm_token", next);
+    else localStorage.removeItem("ttm_token");
+    setToken(next);
+  }
+
+  async function request(path, options = {}) {
+    const response = await fetch(`${API}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Request failed");
+    return data;
+  }
+
+  return { token, saveToken, request };
+}
+
+function AuthScreen({ api, onAuthed }) {
+  const [mode, setMode] = useState("login");
+  const [form, setForm] = useState({ name: "", email: "", password: "", globalRole: "Member", adminKey: "" });
+  const [error, setError] = useState("");
+
+  async function submit(event) {
+    event.preventDefault();
+    setError("");
+    try {
+      const payload = mode === "signup" ? form : { email: form.email, password: form.password };
+      const data = await api.request(`/auth/${mode}`, { method: "POST", body: JSON.stringify(payload) });
+      api.saveToken(data.token);
+      onAuthed(data.user);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <main className="auth-shell">
+      <section className="auth-panel">
+        <div className="brand-mark" style={{ fontSize: "2rem", display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
+          <FolderKanban size={56} style={{ color: "var(--accent)" }} /> Team Task Manager
+        </div>
+        <h1>Where brilliant teams bring ideas to life.</h1>
+        <p>A beautifully simple workspace to organize tasks, collaborate with your team, and ship faster.</p>
+      </section>
+      <form className="auth-card" onSubmit={submit}>
+        <div className="segmented">
+          <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>Login</button>
+          <button type="button" className={mode === "signup" ? "active" : ""} onClick={() => setMode("signup")}>Signup</button>
+        </div>
+        {mode === "signup" && (
+          <>
+            <label>Name<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></label>
+            <label>Account Type
+              <select value={form.globalRole} onChange={(e) => setForm({ ...form, globalRole: e.target.value })}>
+                <option>Member</option>
+                <option>System Admin</option>
+              </select>
+            </label>
+            {form.globalRole === "System Admin" && (
+              <label>Admin Access Key<input type="password" value={form.adminKey} onChange={(e) => setForm({ ...form, adminKey: e.target.value })} required placeholder="Enter the secret key" /></label>
+            )}
+          </>
+        )}
+        <label>Email<input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></label>
+        <label>Password<input type="password" minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required /></label>
+        {error && <p className="error" style={{ fontSize: "0.85rem", lineHeight: "1.4" }}>{error}</p>}
+        <button className="primary" type="submit">{mode === "signup" ? "Create account" : "Enter workspace"}</button>
+        
+        <div style={{ marginTop: "2rem", paddingTop: "1rem", borderTop: "1px solid var(--border)", textAlign: "center" }}>
+          <p style={{ fontSize: "0.8rem", color: "var(--muted)", marginBottom: "0.5rem" }}>Having issues signing up?</p>
+          <button type="button" className="ghost danger" onClick={async () => {
+            if (confirm("Are you sure you want to completely wipe the database? This will fix corrupted schema issues.")) {
+              await fetch("/api/dev/reset");
+              alert("Database wiped! Try signing up now.");
+              window.location.reload();
+            }
+          }}>Wipe & Reset Database</button>
+        </div>
+      </form>
+    </main>
+  );
+}
+
+function App() {
+  const api = useApi();
+  const [user, setUser] = useState(null);
+  const [projects, setProjects] = useState([]);
+  const [activeId, setActiveId] = useState(null);
+  const [projectDetail, setProjectDetail] = useState(null);
+  const [tasks, setTasks] = useState([]);
+  const [dashboard, setDashboard] = useState(null);
+  const [viewMode, setViewMode] = useState("workspace");
+  const [discoverable, setDiscoverable] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [requests, setRequests] = useState([]);
+  const [toast, setToast] = useState("");
+
+  async function loadDiscoverable() {
+    const data = await api.request("/projects/discover");
+    setDiscoverable(data.projects);
+  }
+
+  async function loadAll(nextActive = activeId) {
+    const [projectData, dashData] = await Promise.all([api.request("/projects"), api.request("/dashboard")]);
+    setProjects(projectData.projects);
+    setDashboard(dashData);
+    const targetId = nextActive || projectData.projects[0]?.id || null;
+    setActiveId(targetId);
+    setSearchQuery("");
+    if (targetId) {
+      await loadProject(targetId);
+      setViewMode("workspace");
+    } else {
+      setProjectDetail(null);
+      setTasks([]);
+      if (!nextActive && projectData.projects.length === 0) setViewMode("explore");
+    }
+  }
+
+  async function loadProject(projectId) {
+    const [detail, taskData] = await Promise.all([
+      api.request(`/projects/${projectId}`),
+      api.request(`/projects/${projectId}/tasks`),
+    ]);
+    setProjectDetail(detail);
+    setTasks(taskData.tasks);
+    
+    if (detail?.role === "Admin" || user?.global_role === "System Admin") {
+      api.request(`/projects/${projectId}/requests`).then(res => setRequests(res?.requests || []));
+    } else {
+      setRequests([]);
+    }
+  }
+
+  useEffect(() => {
+    if (!api.token) return;
+    api.request("/me")
+      .then((data) => {
+        setUser(data.user);
+        return loadAll();
+      })
+      .catch((err) => {
+        console.error("Initialization error:", err);
+        // Temporarily disabling automatic logout to prevent the logout loop
+        // api.saveToken("");
+      });
+  }, [api.token]);
+
+  if (!api.token || !user) return <AuthScreen api={api} onAuthed={setUser} />;
+
+  const role = projectDetail?.role;
+  const isAdmin = role === "Admin" || user?.global_role === "System Admin";
+
+  async function createProject(event) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const data = await api.request("/projects", {
+      method: "POST",
+      body: JSON.stringify({ name: form.get("name"), description: form.get("description") }),
+    });
+    formElement.reset();
+    await loadAll(data.project.id);
+  }
+
+  async function joinProject(id) {
+    await api.request(`/projects/${id}/join`, { method: "POST" });
+    await loadDiscoverable();
+    setToast("Request Sent!");
+  }
+
+  async function handleRequest(userId, action) {
+    await api.request(`/projects/${activeId}/requests/${userId}/${action}`, { method: "POST" });
+    await loadProject(activeId);
+    setToast(`Request ${action}d`);
+  }
+
+  async function addMember(event) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const email = new FormData(formElement).get("email");
+    try {
+      await api.request(`/projects/${activeId}/members`, { method: "POST", body: JSON.stringify({ email }) });
+      formElement.reset();
+      await loadProject(activeId);
+      setToast("Member added");
+    } catch (err) {
+      alert("Error adding member: " + err.message);
+    }
+  }
+
+  async function createTask(event) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const assignedTo = Number(form.get("assignedTo"));
+    try {
+      await api.request(`/projects/${activeId}/tasks`, {
+        method: "POST",
+        body: JSON.stringify({
+          title: form.get("title"),
+          description: form.get("description"),
+          dueDate: form.get("dueDate") || null,
+          priority: form.get("priority"),
+          assignedTo: assignedTo || null,
+        }),
+      });
+      formElement.reset();
+      await Promise.all([loadProject(activeId), loadAll(activeId)]);
+    } catch (err) {
+      alert("Error creating task: " + err.message);
+    }
+  }
+
+  async function updateStatus(task, status) {
+    await api.request(`/projects/${activeId}/tasks/${task.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+    await Promise.all([loadProject(activeId), loadAll(activeId)]);
+  }
+
+  async function promoteMember(id) {
+    await api.request(`/projects/${activeId}/members/${id}/role`, { method: "PATCH", body: JSON.stringify({ role: "Admin" }) });
+    await loadProject(activeId);
+    setToast("Promoted to Admin");
+  }
+
+  async function removeMember(id) {
+    await api.request(`/projects/${activeId}/members/${id}`, { method: "DELETE" });
+    await loadProject(activeId);
+  }
+
+  async function removeTask(id) {
+    await api.request(`/projects/${activeId}/tasks/${id}`, { method: "DELETE" });
+    await Promise.all([loadProject(activeId), loadAll(activeId)]);
+  }
+
+  return (
+    <main className="app-shell">
+      <aside className="sidebar">
+        <div className="brand-mark"><FolderKanban size={22} /> TTM</div>
+        <div className="user-box">
+          <strong>{user.name}</strong>
+          <span>{user.email}</span>
+        </div>
+        {user.global_role === "System Admin" && (
+          <form className="mini-form" onSubmit={createProject}>
+            <input name="name" placeholder="New project name" required />
+            <textarea name="description" placeholder="Project brief" rows="3" />
+            <button className="primary" type="submit"><Plus size={16} /> Create project</button>
+          </form>
+        )}
+        <nav className="project-list">
+          <button className={`nav-link ${viewMode === "explore" ? "active" : ""}`} onClick={() => { setViewMode("explore"); loadDiscoverable(); }}>
+            <Compass size={16} /> Explore Projects
+          </button>
+          <hr />
+          {projects.map((project) => (
+            <button key={project.id} className={project.id === activeId && viewMode === "workspace" ? "active" : ""} onClick={() => { setActiveId(project.id); loadProject(project.id); setViewMode("workspace"); }}>
+              <div className="project-list-top">
+                <span>{project.name}</span>
+                <small>{project.role}</small>
+              </div>
+              <div className="progress-track"><div className="progress-fill" style={{ width: `${(project.done_count / Math.max(1, project.task_count)) * 100}%` }}></div></div>
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <button className="ghost logout" onClick={() => { api.saveToken(""); setUser(null); }}><LogOut size={16} /> Logout</button>
+          <button className="ghost danger" onClick={async () => {
+            if (confirm("Are you sure you want to permanently delete your account? This cannot be undone.")) {
+              await api.request("/me", { method: "DELETE" });
+              api.saveToken("");
+              setUser(null);
+            }
+          }}><Trash2 size={16} /> Delete Account</button>
+        </div>
+      </aside>
+
+      <section className="workspace">
+        {viewMode === "explore" ? (
+          <section className="explore-view">
+            <header className="project-header">
+              <h1>Explore Projects</h1>
+              <p>Discover and join public projects in your organization.</p>
+            </header>
+            <div className="discover-grid">
+              {discoverable.length === 0 ? (
+                <p>No new projects available to join.</p>
+              ) : (
+                discoverable.map((p) => (
+                  <article key={p.id} className="project-card">
+                    <h3>{p.name}</h3>
+                    <p>{p.description || "No description"}</p>
+                    <div className="task-meta">
+                      <span>{p.member_count} members</span>
+                      <span>{p.task_count} tasks</span>
+                      <span>By {p.creator_name}</span>
+                    </div>
+                    {p.request_status === 'Pending' ? (
+                      <button className="primary outline" disabled>Request Sent</button>
+                    ) : (
+                      <button className="primary" onClick={() => joinProject(p.id)}>Join Project</button>
+                    )}
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+        ) : !projectDetail ? (
+          <section className="empty-state">
+            <ClipboardList size={42} />
+            <h2>Create a project to start assigning work.</h2>
+          </section>
+        ) : (
+          <>
+            <Dashboard dashboard={dashboard} />
+            <header className="project-header">
+              <div className="header-info">
+                <span className="eyebrow">{projectDetail.role} workspace</span>
+                <h1>{projectDetail.project.name}</h1>
+                <p>{projectDetail.project.description || "No project description yet."}</p>
+                <div className="header-progress">
+                  <div className="progress-track"><div className="progress-fill" style={{ width: `${(tasks.filter(t => t.status === "Done").length / Math.max(1, tasks.length)) * 100}%` }}></div></div>
+                  <small>{tasks.filter(t => t.status === "Done").length} of {tasks.length} tasks completed</small>
+                </div>
+              </div>
+              <div className="header-actions">
+                <span className={`role-chip ${isAdmin ? "admin" : ""}`}><Shield size={15} /> {projectDetail.role}</span>
+              </div>
+            </header>
+
+            <section className="split-layout">
+              <div className="task-board-container">
+                <div className="search-bar">
+                  <Search size={18} className="search-icon" />
+                  <input type="text" placeholder="Search tasks by title or description..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                </div>
+                <div className="task-board">
+                  {statuses.map((status) => {
+                    const filteredTasks = tasks.filter(t => t.status === status && (!searchQuery || t.title.toLowerCase().includes(searchQuery.toLowerCase()) || t.description?.toLowerCase().includes(searchQuery.toLowerCase())));
+                    return (
+                      <TaskColumn
+                        key={status}
+                        status={status}
+                        tasks={filteredTasks}
+                        onStatus={updateStatus}
+                        onDelete={isAdmin ? removeTask : null}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              <aside className="control-rail">
+                {isAdmin && (
+                  <>
+                    {requests.length > 0 && (
+                      <Panel title="Join Requests" icon={<UserPlus size={18} />}>
+                        <div className="member-list">
+                          {requests.map(req => (
+                            <div className="member" key={req.id}>
+                              <span>{req.name}<small>{req.email}</small></span>
+                              <div className="member-actions">
+                                <button className="icon-button" onClick={() => handleRequest(req.id, 'approve')} aria-label="Approve" title="Approve"><CheckCircle2 size={15} color="var(--success)" /></button>
+                                <button className="icon-button danger" onClick={() => handleRequest(req.id, 'reject')} aria-label="Reject" title="Reject"><Trash2 size={15} /></button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </Panel>
+                    )}
+                    <Panel title="Create Task" icon={<Plus size={18} />}>
+                      <form className="stack-form" onSubmit={createTask}>
+                        <input name="title" placeholder="Task title" required />
+                        <textarea name="description" placeholder="Description" rows="3" />
+                        <input name="dueDate" type="date" />
+                        <select name="priority" defaultValue="Medium">{priorities.map((item) => <option key={item}>{item}</option>)}</select>
+                        <select name="assignedTo" defaultValue="">
+                          <option value="">Unassigned</option>
+                          {projectDetail.members.map((member) => <option value={member.id} key={member.id}>{member.name}</option>)}
+                        </select>
+                        <button className="primary" type="submit">Add task</button>
+                      </form>
+                    </Panel>
+                    <Panel title="Add Member" icon={<UserPlus size={18} />}>
+                      <form className="inline-form" onSubmit={addMember}>
+                        <input name="email" type="email" placeholder="member@email.com" required />
+                        <button className="icon-button" type="submit" aria-label="Add member"><Plus size={18} /></button>
+                      </form>
+                    </Panel>
+                  </>
+                )}
+                <Panel title="Team" icon={<Users size={18} />}>
+                  <div className="member-list">
+                    {projectDetail.members.map((member) => (
+                      <div className="member" key={member.id}>
+                        <span>{member.name}<small>{member.email}</small></span>
+                        <strong>{member.role}</strong>
+                        {isAdmin && member.id !== user.id && (
+                          <div className="member-actions">
+                            {member.role === "Member" && <button className="icon-button" onClick={() => promoteMember(member.id)} aria-label="Make Admin" title="Make Admin"><Shield size={15} /></button>}
+                            <button className="icon-button danger" onClick={() => removeMember(member.id)} aria-label="Remove member" title="Remove Member"><Trash2 size={15} /></button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </Panel>
+              </aside>
+            </section>
+          </>
+        )}
+        {toast && <button className="toast" onAnimationEnd={() => setToast("")}>{toast}</button>}
+      </section>
+    </main>
+  );
+}
+
+function Dashboard({ dashboard }) {
+  const summary = dashboard?.summary || {};
+  const cards = [
+    ["Total tasks", summary.total_tasks || 0, <ClipboardList size={18} />],
+    ["In progress", summary.in_progress || 0, <FolderKanban size={18} />],
+    ["Done", summary.done || 0, <CheckCircle2 size={18} />],
+    ["Overdue", summary.overdue || 0, <AlertTriangle size={18} />],
+  ];
+  return (
+    <section className="dashboard-strip">
+      {cards.map(([label, value, icon]) => (
+        <article className="metric" key={label}>
+          {icon}<span>{label}</span><strong>{value}</strong>
+        </article>
+      ))}
+      <article className="metric wide">
+        <Users size={18} /><span>Tasks per user</span>
+        <div className="user-bars">
+          {(dashboard?.perUser || []).map((item) => <i key={item.name} style={{ "--w": `${Math.max(8, item.count * 16)}px` }}>{item.name}: {item.count}</i>)}
+        </div>
+      </article>
+    </section>
+  );
+}
+
+function TaskColumn({ status, tasks, onStatus, onDelete }) {
+  const [isOver, setIsOver] = useState(false);
+
+  return (
+    <section 
+      className={`column ${isOver ? 'drag-over' : ''}`}
+      onDragOver={(e) => { e.preventDefault(); setIsOver(true); }}
+      onDragLeave={() => setIsOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setIsOver(false);
+        const taskId = Number(e.dataTransfer.getData("taskId"));
+        if (taskId) onStatus({ id: taskId }, status);
+      }}
+    >
+      <header><h2>{status}</h2><span>{tasks.length}</span></header>
+      <div className="task-stack">
+        {tasks.map((task) => <TaskCard key={task.id} task={task} onStatus={onStatus} onDelete={onDelete} />)}
+        {tasks.length === 0 && <div className="empty-column-state">Drop tasks here</div>}
+      </div>
+    </section>
+  );
+}
+
+function TaskCard({ task, onStatus, onDelete }) {
+  const overdue = task.due_date && new Date(task.due_date) < new Date() && task.status !== "Done";
+  const formattedDate = useMemo(() => (task.due_date ? new Date(task.due_date).toLocaleDateString() : "No due date"), [task.due_date]);
+  return (
+    <article 
+      className={`task-card priority-${task.priority.toLowerCase()} ${overdue ? "overdue" : ""}`}
+      draggable="true"
+      onDragStart={(e) => {
+        e.dataTransfer.setData("taskId", task.id.toString());
+        e.currentTarget.style.opacity = '0.5';
+      }}
+      onDragEnd={(e) => {
+        e.currentTarget.style.opacity = '1';
+      }}
+    >
+      <div className="task-top">
+        <div className="task-title-group">
+          <GripVertical size={16} className="drag-handle" />
+          <strong>{task.title}</strong>
+        </div>
+        {onDelete && <button className="icon-button danger" onClick={() => onDelete(task.id)} aria-label="Delete task"><Trash2 size={15} /></button>}
+      </div>
+      <p>{task.description || "No description"}</p>
+      <div className="task-meta">
+        <span>{task.priority}</span>
+        <span>{formattedDate}</span>
+        <span>{task.assignee_name || "Unassigned"}</span>
+      </div>
+      <select value={task.status} onChange={(event) => onStatus(task, event.target.value)}>
+        {statuses.map((status) => <option key={status}>{status}</option>)}
+      </select>
+    </article>
+  );
+}
+
+function Panel({ title, icon, children }) {
+  return (
+    <section className="panel">
+      <h2>{icon}{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+createRoot(document.getElementById("root")).render(<App />);
