@@ -433,6 +433,18 @@ function App() {
                         <input name="email" type="email" placeholder="member@email.com" required />
                         <button className="icon-button" type="submit" aria-label="Add member"><Plus size={18} /></button>
                       </form>
+                      <div className="member-list-compact">
+                        <h3>Team members</h3>
+                        {projectDetail.members.map((member) => (
+                          <div className="member compact" key={member.id}>
+                            <div>
+                              <strong>{member.name}</strong>
+                              <small>{member.email}</small>
+                              <small className="member-role">{member.role}</small>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </Panel>
                   </>
                 )}
@@ -440,8 +452,11 @@ function App() {
                   <div className="member-list">
                     {projectDetail.members.map((member) => (
                       <div className="member" key={member.id}>
-                        <span>{member.name}<small>{member.email}</small></span>
-                        <strong>{member.role}</strong>
+                        <span>
+                          <strong>{member.name}</strong>
+                          <small>{member.email}</small>
+                          <small className="member-role">{member.role}</small>
+                        </span>
                         {isAdmin && member.id !== user.id && (
                           <div className="member-actions">
                             {member.role === "Member" && <button className="icon-button" onClick={() => promoteMember(member.id)} aria-label="Make Admin" title="Make Admin"><Shield size={15} /></button>}

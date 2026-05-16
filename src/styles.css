@@ -646,6 +646,20 @@ select option {
   gap: 1rem;
 }
 
+.member-list-compact {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.member-list-compact h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
 .member {
   display: grid;
   gap: 0.5rem;
@@ -658,6 +672,11 @@ select option {
   border-radius: 0;
 }
 
+.member.compact {
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
 .member:last-child {
   border-bottom: none;
   padding-bottom: 0;
@@ -665,12 +684,19 @@ select option {
 
 .member span {
   display: grid;
+  gap: 0.15rem;
   font-weight: 500;
 }
 
-.member strong {
+.member strong,
+.member-role {
   color: var(--success);
   font-size: 0.85rem;
+}
+
+.member-role {
+  font-weight: 500;
+  color: var(--muted);
 }
 
 .member-actions {
