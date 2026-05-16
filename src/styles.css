@@ -285,8 +285,10 @@ select option {
 .user-box {
   display: grid;
   gap: 0.75rem;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid var(--border);
+  padding: 1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .user-identity {
@@ -296,42 +298,49 @@ select option {
 }
 
 .avatar {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: var(--accent);
-  color: #fff;
-  font-size: 1.05rem;
+  background: rgba(99, 102, 241, 0.18);
+  color: var(--accent);
+  font-size: 1rem;
   font-weight: 700;
+}
+
+.user-box strong {
+  display: block;
+  color: #fff;
+  font-size: 1rem;
 }
 
 .user-box span,
 .project-list small,
 .member small {
-  color: var(--muted);
-  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.83rem;
 }
 
 .user-role {
   display: inline-flex;
   align-items: center;
-  padding: 0.35rem 0.65rem;
+  padding: 0.3rem 0.65rem;
   border-radius: 999px;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 700;
-  width: fit-content;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .user-role.admin {
-  background: rgba(239, 68, 68, 0.14);
-  color: var(--danger);
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
 }
 
 .user-role.member {
-  background: rgba(16, 185, 129, 0.14);
-  color: var(--success);
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
 }
 
 .member-role {
