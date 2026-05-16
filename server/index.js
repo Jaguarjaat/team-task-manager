@@ -149,6 +149,11 @@ app.get("/api/dev/reset", async (req, res) => {
   res.json({ message: "Database completely wiped and recreated." });
 });
 
+app.get("/api/users", requireAuth, async (req, res) => {
+  const { rows } = await query("SELECT id, name, email FROM users ORDER BY name ASC");
+  res.json({ users: rows });
+});
+
 app.get("/api/projects", requireAuth, async (req, res) => {
   if (req.user.global_role === "System Admin") {
     const { rows } = await query(

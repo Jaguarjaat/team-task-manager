@@ -140,6 +140,7 @@ function App({ routeProjectId = null, routeMemberId = null }) {
   const [discoverable, setDiscoverable] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [requests, setRequests] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [toast, setToast] = useState("");
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [activeProfileId, setActiveProfileId] = useState(routeMemberId);
@@ -176,8 +177,10 @@ function App({ routeProjectId = null, routeMemberId = null }) {
     
     if (detail?.role === "Admin" || user?.global_role === "System Admin") {
       api.request(`/projects/${projectId}/requests`).then(res => setRequests(res?.requests || []));
+      api.request(`/users`).then(res => setAllUsers(res?.users || []));
     } else {
       setRequests([]);
+      setAllUsers([]);
     }
   }
 
@@ -490,22 +493,15 @@ function App({ routeProjectId = null, routeMemberId = null }) {
                       </form>
                     </Panel>
                     <Panel title="Add Member" icon={<UserPlus size={18} />}>
-                      <form className="inline-form" onSubmit={addMember}>
-                        <input name="email" type="email" placeholder="member@email.com" required />
-                        <button className="icon-button" type="submit" aria-label="Add member"><Plus size={18} /></button>
+                      <form className="stack-form" onSubmit={addMember}>
+                        <select name="email" required defaultValue="">
+                          <option value="" disabled>Select a user to invite...</option>
+                          {allUsers.filter(u => !projectDetail.members.some(m => m.id === u.id)).map(u => (
+                            <option key={u.id} value={u.email}>{u.name} ({u.email})</option>
+                          ))}
+                        </select>
+                        <button className="primary" type="submit">Add to project</button>
                       </form>
-                      <div className="member-list-compact">
-                        <h3>Team members</h3>
-                        {projectDetail.members.map((member) => (
-                          <div className="member compact" key={member.id}>
-                            <div>
-                              <strong>{member.name}</strong>
-                              <small>{member.email}</small>
-                              <small className="member-role">{member.role}</small>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
                     </Panel>
                   </>
                 )}
@@ -513,10 +509,22 @@ function App({ routeProjectId = null, routeMemberId = null }) {
                   <div className="member-list">
                     {projectDetail.members.map((member) => (
                       <div className="member" key={member.id} onClick={() => { setActiveProfileId(member.id); navigate(`/projects/${activeId}/profile/${member.id}`); }}>
-                        <span>
+                        <span style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                           <strong>{member.name}</strong>
                           <small>{member.email}</small>
-                          <small className={`member-role ${member.role.toLowerCase()}`}>{member.role}</small>
+                          <small className="member-role-badge" style={{
+                            display: 'inline-block',
+                            marginTop: '4px',
+                            padding: '2px 8px',
+                            background: member.role === 'Admin' ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255, 255, 255, 0.1)',
+                            color: member.role === 'Admin' ? 'var(--accent)' : 'var(--muted)',
+                            borderRadius: '12px',
+                            fontSize: '0.7rem',
+                            fontWeight: '600',
+                            width: 'fit-content'
+                          }}>
+                            {member.role}
+                          </small>
                         </span>
                         {isAdmin && member.id !== user.id && (
                           <div className="member-actions">
