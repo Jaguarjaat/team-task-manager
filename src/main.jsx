@@ -310,18 +310,24 @@ function App({ routeProjectId = null, routeMemberId = null }) {
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <div className="brand-mark"><FolderKanban size={22} /> TTM</div>
-        <div className="user-box">
-          <div className="user-identity">
-            <div className="avatar">{user.name?.[0]?.toUpperCase() || "?"}</div>
-            <div>
-              <strong>{user.name}</strong>
-              <span>{user.email}</span>
+        <div className="sidebar-top-section">
+          <div className="custom-profile-badge">
+            <div className="profile-badge-stack">
               {projectDetail?.role && (
-                <small className={`user-role ${projectDetail.role.toLowerCase()}`}>{projectDetail.role}</small>
+                <div className={`role-pill ${projectDetail.role.toLowerCase()}`} title={projectDetail.role}>
+                  <Shield size={14} />
+                </div>
               )}
+              <div className="avatar-box">
+                {user.name?.[0]?.toUpperCase() || "?"}
+              </div>
+            </div>
+            <div className="profile-text">
+              <strong>{user.name}</strong>
+              <span>{projectDetail?.role || "Operator"}</span>
             </div>
           </div>
+          <div className="brand-mark"><FolderKanban size={22} /> TTM</div>
         </div>
         {user.global_role === "System Admin" && (
           <form className="mini-form" onSubmit={createProject}>
