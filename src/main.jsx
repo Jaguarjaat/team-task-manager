@@ -160,24 +160,7 @@ function App({ routeProjectId = null, routeMemberId = null }) {
     setDiscoverable(data.projects);
   }
 
-  async function loadAll(nextActive = routeProjectId || activeId) {
-    const [projectData, dashData] = await Promise.all([api.request("/projects"), api.request("/dashboard")]);
-    setProjects(projectData.projects);
-    setDashboard(dashData);
-    const targetId = nextActive || projectData.projects[0]?.id || null;
-    setActiveId(targetId);
-    setSearchQuery("");
-    if (targetId) {
-      await loadProject(targetId);
-      setViewMode("workspace");
-    } else {
-      setProjectDetail(null);
-      setTasks([]);
-      if (!nextActive && projectData.projects.length === 0) setViewMode("explore");
-    }
-  }
-
-  async function loadProject(projectId) {
+  async function loadProject(projectId, currentUser = user) {
     const [detail, taskData] = await Promise.all([
       api.request(`/projects/${projectId}`),
       api.request(`/projects/${projectId}/tasks`),
@@ -185,7 +168,8 @@ function App({ routeProjectId = null, routeMemberId = null }) {
     setProjectDetail(detail);
     setTasks(taskData.tasks);
     
-    if (detail?.role === "Admin" || user?.global_role === "System Admin") {
+    const isAdminUser = detail?.role === "Admin" || currentUser?.global_role === "System Admin";
+    if (isAdminUser) {
       api.request(`/projects/${projectId}/requests`).then(res => setRequests(res?.requests || []));
       api.request(`/users`).then(res => setAllUsers(res?.users || []));
     } else {
@@ -194,27 +178,52 @@ function App({ routeProjectId = null, routeMemberId = null }) {
     }
   }
 
+  // 1. Initial auth & projects list load on mount or token change
   useEffect(() => {
     if (!api.token) return;
     api.request("/me")
       .then((data) => {
         setUser(data.user);
-        return loadAll(routeProjectId);
+        return Promise.all([api.request("/projects"), api.request("/dashboard")]);
+      })
+      .then(([projectData, dashData]) => {
+        setProjects(projectData.projects);
+        setDashboard(dashData);
+        if (!routeProjectId) {
+          if (projectData.projects.length > 0) {
+            navigate(`/projects/${projectData.projects[0].id}`);
+          } else {
+            setViewMode("explore");
+            loadDiscoverable();
+          }
+        }
       })
       .catch((err) => {
         console.error("Initialization error:", err);
       });
-  }, [api.token, routeProjectId]);
+  }, [api.token]);
 
+  // 2. Load active project details and tasks when active project in route changes
   useEffect(() => {
-    if (routeProjectId && routeProjectId !== activeId) {
+    if (!api.token || !user) return;
+    if (routeProjectId) {
       setActiveId(routeProjectId);
+      loadProject(routeProjectId, user);
+      setViewMode("workspace");
+    } else {
+      setActiveId(null);
+      setProjectDetail(null);
+      setTasks([]);
     }
-  }, [routeProjectId]);
+  }, [routeProjectId, user]);
 
   useEffect(() => {
     setActiveProfileId(routeMemberId);
   }, [routeMemberId]);
+
+  function handleUserUpdate() {
+    api.request("/me").then(res => setUser(res.user));
+  }
 
   if (!api.token || !user) return <AuthScreen api={api} onAuthed={setUser} />;
 
@@ -231,7 +240,10 @@ function App({ routeProjectId = null, routeMemberId = null }) {
       body: JSON.stringify({ name: form.get("name"), description: form.get("description") }),
     });
     formElement.reset();
-    await loadAll(data.project.id);
+    const [projectData, dashData] = await Promise.all([api.request("/projects"), api.request("/dashboard")]);
+    setProjects(projectData.projects);
+    setDashboard(dashData);
+    navigate(`/projects/${data.project.id}`);
   }
 
   async function joinProject(id) {
@@ -266,7 +278,7 @@ function App({ routeProjectId = null, routeMemberId = null }) {
     const form = new FormData(formElement);
     const assignedTo = Number(form.get("assignedTo"));
     try {
-      await api.request(`/projects/${activeId}/tasks`, {
+      const data = await api.request(`/projects/${activeId}/tasks`, {
         method: "POST",
         body: JSON.stringify({
           title: form.get("title"),
@@ -277,18 +289,60 @@ function App({ routeProjectId = null, routeMemberId = null }) {
         }),
       });
       formElement.reset();
-      await Promise.all([loadProject(activeId), loadAll(activeId)]);
+      
+      const assigneeObj = projectDetail.members.find(m => m.id === assignedTo);
+      const enrichedTask = {
+        ...data.task,
+        assignee_name: assigneeObj ? assigneeObj.name : null,
+        creator_name: user.name
+      };
+      
+      setTasks(prevTasks => [enrichedTask, ...prevTasks]);
+      
+      const dashData = await api.request("/dashboard");
+      setDashboard(dashData);
+      setProjects(prevProjects => prevProjects.map(p => {
+        if (p.id === activeId) {
+          return {
+            ...p,
+            task_count: p.task_count + 1
+          };
+        }
+        return p;
+      }));
+      setToast("Task created");
     } catch (err) {
       alert("Error creating task: " + err.message);
     }
   }
 
   async function updateStatus(task, status) {
-    await api.request(`/projects/${activeId}/tasks/${task.id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ status }),
-    });
-    await Promise.all([loadProject(activeId), loadAll(activeId)]);
+    setTasks(prevTasks => prevTasks.map(t => t.id === task.id ? { ...t, status } : t));
+    try {
+      await api.request(`/projects/${activeId}/tasks/${task.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      const dashData = await api.request("/dashboard");
+      setDashboard(dashData);
+      setProjects(prevProjects => prevProjects.map(p => {
+        if (p.id === activeId) {
+          const isPrevDone = task.status === "Done";
+          const isNextDone = status === "Done";
+          let doneDiff = 0;
+          if (!isPrevDone && isNextDone) doneDiff = 1;
+          if (isPrevDone && !isNextDone) doneDiff = -1;
+          return {
+            ...p,
+            done_count: p.done_count + doneDiff
+          };
+        }
+        return p;
+      }));
+    } catch (err) {
+      setTasks(prevTasks => prevTasks.map(t => t.id === task.id ? { ...t, status: task.status } : t));
+      alert("Failed to update status: " + err.message);
+    }
   }
 
   async function promoteMember(id) {
@@ -303,8 +357,27 @@ function App({ routeProjectId = null, routeMemberId = null }) {
   }
 
   async function removeTask(id) {
-    await api.request(`/projects/${activeId}/tasks/${id}`, { method: "DELETE" });
-    await Promise.all([loadProject(activeId), loadAll(activeId)]);
+    const taskToDelete = tasks.find(t => t.id === id);
+    if (!taskToDelete) return;
+    setTasks(prevTasks => prevTasks.filter(t => t.id !== id));
+    try {
+      await api.request(`/projects/${activeId}/tasks/${id}`, { method: "DELETE" });
+      const dashData = await api.request("/dashboard");
+      setDashboard(dashData);
+      setProjects(prevProjects => prevProjects.map(p => {
+        if (p.id === activeId) {
+          return {
+            ...p,
+            task_count: p.task_count - 1,
+            done_count: p.done_count - (taskToDelete.status === "Done" ? 1 : 0)
+          };
+        }
+        return p;
+      }));
+    } catch (err) {
+      setTasks(prevTasks => [taskToDelete, ...prevTasks]);
+      alert("Error deleting task: " + err.message);
+    }
   }
 
   return (
@@ -342,7 +415,7 @@ function App({ routeProjectId = null, routeMemberId = null }) {
           </button>
           <hr />
           {projects.map((project) => (
-            <button key={project.id} className={project.id === activeId && viewMode === "workspace" ? "active" : ""} onClick={() => { setActiveId(project.id); navigate(`/projects/${project.id}`); loadProject(project.id); setViewMode("workspace"); }}>
+            <button key={project.id} className={project.id === activeId && viewMode === "workspace" ? "active" : ""} onClick={() => { navigate(`/projects/${project.id}`); }}>
               <div className="project-list-top">
                 <span>{project.name}</span>
                 <small>{project.role}</small>
@@ -569,7 +642,7 @@ function App({ routeProjectId = null, routeMemberId = null }) {
         )}
         {toast && <button className="toast" onAnimationEnd={() => setToast("")}>{toast}</button>}
       </section>
-          {settingsOpen && <SettingsModal api={api} onClose={() => setSettingsOpen(false)} />}
+          {settingsOpen && <SettingsModal api={api} onClose={() => setSettingsOpen(false)} onUpdate={handleUserUpdate} />}
     </main>
   );
 }
@@ -712,7 +785,7 @@ function TelemetryDashboard({ dashboard }) {
   );
 }
 
-function SettingsModal({ api, onClose }) {
+function SettingsModal({ api, onClose, onUpdate }) {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -732,6 +805,7 @@ function SettingsModal({ api, onClose }) {
       method: "PUT",
       body: JSON.stringify({ name, password: password || undefined, api_key: apiKey })
     });
+    if (onUpdate) onUpdate();
     onClose();
   }
 
